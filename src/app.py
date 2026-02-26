@@ -10,9 +10,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+from uuid import uuid4
+from fastapi import Header
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
+
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "mergington-admin")
+admin_tokens = set()
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
@@ -110,9 +115,36 @@ def signup_for_activity(activity_name: str, email: str):
     return {"message": f"Signed up {email} for {activity_name}"}
 
 
+@app.post("/admin/login")
+def admin_login(password: str):
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+
+    token = str(uuid4())
+    admin_tokens.add(token)
+    return {"message": "Admin mode enabled", "token": token}
+
+
+@app.post("/admin/logout")
+def admin_logout(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    if x_admin_token and x_admin_token in admin_tokens:
+        admin_tokens.remove(x_admin_token)
+    return {"message": "Admin mode disabled"}
+
+
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(
+    activity_name: str,
+    email: str,
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")
+):
     """Unregister a student from an activity"""
+    if not x_admin_token or x_admin_token not in admin_tokens:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin mode required to remove a participant"
+        )
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
