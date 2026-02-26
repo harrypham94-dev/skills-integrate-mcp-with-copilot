@@ -16,12 +16,57 @@ body {
 }
 
 header {
+  position: relative;
   text-align: center;
   padding: 20px 0;
   margin-bottom: 30px;
   background-color: #1a237e;
   color: white;
   border-radius: 5px;
+}
+
+.admin-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.icon-btn {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.admin-panel {
+  background-color: white;
+  color: #333;
+  padding: 10px;
+  border-radius: 5px;
+  min-width: 170px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  text-align: left;
+}
+
+.admin-panel p {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.admin-panel button {
+  width: 100%;
 }
 
 header h1 {
@@ -123,6 +168,11 @@ section h3 {
 
 .delete-btn:hover {
   background-color: #ffebee;
+}
+
+.delete-btn:disabled {
+  color: #b0b0b0;
+  cursor: not-allowed;
 }
 
 .participants-section p {

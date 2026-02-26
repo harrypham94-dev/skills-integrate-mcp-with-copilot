@@ -3,6 +3,39 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const adminToggle = document.getElementById("admin-toggle");
+  const adminPanel = document.getElementById("admin-panel");
+  const adminStatus = document.getElementById("admin-status");
+  const adminActionBtn = document.getElementById("admin-action-btn");
+  const ADMIN_TOKEN_STORAGE_KEY = "adminToken";
+
+  function getAdminToken() {
+    return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+  }
+
+  function setAdminToken(token) {
+    if (token) {
+      localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    }
+  }
+
+  function showMessage(text, type) {
+    messageDiv.textContent = text;
+    messageDiv.className = type;
+    messageDiv.classList.remove("hidden");
+
+    setTimeout(() => {
+      messageDiv.classList.add("hidden");
+    }, 5000);
+  }
+
+  function renderAdminState() {
+    const isAdmin = Boolean(getAdminToken());
+    adminStatus.textContent = isAdmin ? "Admin mode: On" : "Admin mode: Off";
+    adminActionBtn.textContent = isAdmin ? "Log Out" : "Log In";
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -17,6 +50,10 @@ document.addEventListener("DOMContentLoaded", () => {
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
+        const adminToken = getAdminToken();
+        const deleteDisabledAttrs = adminToken
+          ? ""
+          : 'disabled title="Admin login required"';
 
         const spotsLeft =
           details.max_participants - details.participants.length;
@@ -30,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}" ${deleteDisabledAttrs}>❌</button></li>`
                   )
                   .join("")}
               </ul>
@@ -72,6 +109,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = event.target;
     const activity = button.getAttribute("data-activity");
     const email = button.getAttribute("data-email");
+    const adminToken = getAdminToken();
+
+    if (!adminToken) {
+      showMessage("Admin mode required to remove a participant.", "error");
+      return;
+    }
 
     try {
       const response = await fetch(
@@ -80,32 +123,24 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: {
+            "X-Admin-Token": adminToken,
+          },
         }
       );
 
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        showMessage(result.message, "success");
 
         // Refresh activities list to show updated participants
         fetchActivities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(result.detail || "An error occurred", "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to unregister. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to unregister. Please try again.", "error");
       console.error("Error unregistering:", error);
     }
   }
@@ -130,31 +165,76 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        showMessage(result.message, "success");
         signupForm.reset();
 
         // Refresh activities list to show updated participants
         fetchActivities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(result.detail || "An error occurred", "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to sign up. Please try again.", "error");
       console.error("Error signing up:", error);
     }
   });
 
+  adminToggle.addEventListener("click", () => {
+    adminPanel.classList.toggle("hidden");
+  });
+
+  adminActionBtn.addEventListener("click", async () => {
+    const currentToken = getAdminToken();
+
+    if (currentToken) {
+      try {
+        await fetch("/admin/logout", {
+          method: "POST",
+          headers: {
+            "X-Admin-Token": currentToken,
+          },
+        });
+      } catch (error) {
+        console.error("Error logging out:", error);
+      }
+
+      setAdminToken(null);
+      renderAdminState();
+      fetchActivities();
+      showMessage("Admin mode disabled.", "info");
+      return;
+    }
+
+    const password = prompt("Enter admin password:");
+    if (!password) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/admin/login?password=${encodeURIComponent(password)}`,
+        {
+          method: "POST",
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        showMessage(result.detail || "Invalid admin credentials.", "error");
+        return;
+      }
+
+      setAdminToken(result.token);
+      renderAdminState();
+      fetchActivities();
+      showMessage("Admin mode enabled.", "success");
+    } catch (error) {
+      showMessage("Failed to enable admin mode.", "error");
+      console.error("Error logging in as admin:", error);
+    }
+  });
+
   // Initialize app
+  renderAdminState();
   fetchActivities();
 });
